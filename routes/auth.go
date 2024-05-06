@@ -6,20 +6,21 @@ import (
 	// "net/http"
 
 	"github.com/gin-gonic/gin"
-	// "gorm.io/gorm"
+	"log"
+	"gorm.io/gorm"
 )
 
+
+var DB *gorm.DB
+
 func AuthRoutes(r *gin.Engine) {
-	r.GET("/", controllers.AllUsersHandler)
+	router := r.Group("/")
 
-	// Создание пользователя
-	r.POST("/create-user", controllers.CreateUserHandler)
+	router.GET("/", controllers.Hello)
+	router.POST("/signup", controllers.SignUp)
+	router.POST("/signin", controllers.SignIn)
+	router.GET("/api", controllers.JWTMiddleware(), controllers.APIHandler)
 
-	// Обновление пользователя
-	r.POST("/update-user", func(c *gin.Context) {
-		controllers.UpdateUserHandler(c.Writer, c.Request)
-	})
-
-	// Загрузка шаблона main.html
-	r.LoadHTMLGlob("templates/*")
+	log.Println("Server starting on http://localhost:8080/")
+	log.Fatal(r.Run(":8080"))
 }
