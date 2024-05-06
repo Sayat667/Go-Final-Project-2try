@@ -5,7 +5,7 @@ import (
 	"gofp/models"
 	"gofp/utils"
 
-	"gofp/controllers"
+	// "gofp/controllers"
 	"gofp/routes"
 	"os"
 
@@ -34,7 +34,7 @@ func main() {
 
 	// Initialize DB
 	db := models.InitDB(config)
-	controllers.SetDB(db)
+	utils.SetDB(db)
 	// Load the routes
 	routes.AuthRoutes(r)
 
