@@ -2,7 +2,6 @@ package models
 
 import (
 	"fmt"
-
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -26,7 +25,7 @@ func InitDB(cfg Config) (*gorm.DB) {
 		panic(err)
 	}
 	fmt.Println("successfully opened")
-	if err := db.AutoMigrate(&User{}); err != nil {
+	if err := db.AutoMigrate(&User{},&Dish{},&Drink{},&Set{},&Basket{}); err != nil {
 		panic(err)
 	}
 	fmt.Println("User model migrated")

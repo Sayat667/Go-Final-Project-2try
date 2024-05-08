@@ -2,14 +2,15 @@ package main
 
 import (
 	"log"
+	"gofp/controllers"
 	"gofp/models"
-	"gofp/utils"
-
-	// "gofp/controllers"
 	"gofp/routes"
+	"gofp/utils"
+	// "gofp/controllers"
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"github.com/joho/godotenv"
 )
 
@@ -34,10 +35,15 @@ func main() {
 
 	// Initialize DB
 	db := models.InitDB(config)
-	utils.SetDB(db)
+	SetDB(db)
 	// Load the routes
 	routes.AuthRoutes(r)
 
 	// Run the server
 	r.Run(":8080")
+}
+
+func SetDB(db *gorm.DB) {
+	controllers.DB = db
+	routes.DB = db
 }
