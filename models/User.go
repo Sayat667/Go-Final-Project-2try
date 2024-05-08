@@ -1,22 +1,21 @@
 package models
 
 import (
-	"gorm.io/gorm"
 	"github.com/dgrijalva/jwt-go"
+	"gorm.io/gorm"
 )
 
 type User struct {
-    gorm.Model
-    Username     string `json:"name"`
-    Email    string `gorm:"unique" json:"email"`
-    Password string `json:"password"`
-    Role     string `json:"role"`
+	gorm.Model
+	Username string `json:"name"`
+	Email    string `gorm:"unique" json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
 }
 
-
 type Claims struct {
-    Role string `json:"role"`
-    jwt.StandardClaims
+	Role string `json:"role"`
+	jwt.StandardClaims
 }
 
 type Permissions string
@@ -55,7 +54,7 @@ type Basket struct {
 	UserID   uint
 	Total    int
 	SetID    uint
-	Drinks   []Drink `gorm:"foreignKey:BasketID"`
-	Dishes   []Dish  `gorm:"foreignKey:BasketID"`
+	Drinks   []Drink
+	Dishes   []Dish
 	TotalCal float64
 }
