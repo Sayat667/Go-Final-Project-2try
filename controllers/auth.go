@@ -1,111 +1,189 @@
 package controllers
 
 import (
-	"fmt"
+	// "fmt"
+	"gofp/utils"
 	"gofp/models"
+	// h "gofp/helpers"
 	// "gofp/utils"
-	"net/http"
+	// "net/http"
 	// "strconv"
-	"strings"
+	// "strings"
 	// "encoding/json"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"github.com/dgrijalva/jwt-go"
+	"time"
 )
 
 var DB *gorm.DB
 var jwtKey = []byte("B0qtauga-Bo1a=ma?kot1nd1/qyswy+nelzya")
 
+
+func HomePage(c *gin.Context){
+	// СЮДА КОД ГЛАВНОЙ СТРАНИЦЫ ................ Damir Aitbay
+	c.JSON(200, gin.H{
+        "message": "That is the main page",
+    })
+
+
+	
+    cookie, err := c.Cookie("token")
+
+    if err != nil {
+        c.JSON(401, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    claims, err := utils.ParseToken(cookie)
+
+    if err != nil {
+        c.JSON(401, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    if claims.Role != "user" && claims.Role != "admin" {
+        c.JSON(401, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    c.JSON(200, gin.H{"success": "home page", "role": claims.Role})
+}
+
+func Premium(c *gin.Context) {
+
+    cookie, err := c.Cookie("token")
+
+    if err != nil {
+        c.JSON(401, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    claims, err := utils.ParseToken(cookie)
+
+    if err != nil {
+        c.JSON(401, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    if claims.Role != "admin" {
+        c.JSON(401, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    c.JSON(200, gin.H{"success": "premium page", "role": claims.Role})
+}
+
 func SignUp(c *gin.Context) {
-	var u models.User
-	err := c.BindJSON(&u)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	var user models.User
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-		return
-	}
+    if err := c.ShouldBindJSON(&user); err != nil {
+        c.JSON(400, gin.H{"error": err.Error()})
+        return
+    }
 
-	u.ID = uuid.New().String()
-	u.Password = string(hashedPassword)
-	// Assuming 'db' is your GORM DB connection, save user to database
-	DB.Create(&u)
+    var existingUser models.User
 
-	c.JSON(http.StatusCreated, u)
+    models.DB.Where("email = ?", user.Email).First(&existingUser)
+
+    if existingUser.ID != 0 {
+        c.JSON(400, gin.H{"error": "user already exists"})
+        return
+    }
+
+    var errHash error
+    user.Password, errHash = utils.GenerateHashPassword(user.Password)
+
+    if errHash != nil {
+        c.JSON(500, gin.H{"error": "could not generate password hash"})
+        return
+    }
+
+    models.DB.Create(&user)
+
+    c.JSON(200, gin.H{"success": "user created"})
 }
 
 func SignIn(c *gin.Context) {
-	var u models.User
-	if err := c.BindJSON(&u); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	
+    var user models.User
 
-	var storedUser models.User
-	if err := DB.Where("username = ?", u.Username).First(&storedUser).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
-		return
-	}
+    if err := c.ShouldBindJSON(&user); err != nil {
+        c.JSON(400, gin.H{"error": err.Error()})
+        return
+    }
 
-	if err := bcrypt.CompareHashAndPassword([]byte(storedUser.Password), []byte(u.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-		return
-	}
+    var existingUser models.User
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"username": u.Username,
-		"iss":      "go-jwt-server",
-	})
+    models.DB.Where("email = ?", user.Email).First(&existingUser)
 
-	tokenString, err := token.SignedString(jwtKey)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign token"})
-		return
-	}
+    if existingUser.ID == 0 {
+        c.JSON(400, gin.H{"error": "user does not exist"})
+        return
+    }
 
-	c.Header("Authorization", "Bearer "+tokenString)
-	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+    errHash := utils.CompareHashPassword(user.Password, existingUser.Password)
+
+    if !errHash {
+        c.JSON(400, gin.H{"error": "invalid password"})
+        return
+    }
+
+    expirationTime := time.Now().Add(5 * time.Minute)
+
+    claims := &models.Claims{
+        Role: existingUser.Role,
+        StandardClaims: jwt.StandardClaims{
+            Subject:   existingUser.Email,
+            ExpiresAt: expirationTime.Unix(),
+        },
+    }
+
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+    tokenString, err := token.SignedString(jwtKey)
+
+    if err != nil {
+        c.JSON(500, gin.H{"error": "could not generate token"})
+        return
+    }
+
+    c.SetCookie("token", tokenString, int(expirationTime.Unix()), "/", "localhost", false, true)
+    c.JSON(200, gin.H{"success": "user logged in"})
 }
 
-func Hello(c *gin.Context) {
-	c.String(http.StatusOK, "Hello, world!")
-}
-func JWTMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			c.Abort()
-			return
-		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method")
-			}
-			return jwtKey, nil
-		})
-
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
+func Logout(c *gin.Context) {
+    c.SetCookie("token", "", -1, "/", "localhost", false, true)
+    c.JSON(200, gin.H{"success": "user logged out"})
 }
 
-func APIHandler(c *gin.Context) {
-	c.String(http.StatusOK, "Access granted to the API.")
-}
+// func JWTMiddleware() gin.HandlerFunc {
+// 	return func(c *gin.Context) {
+// 		authHeader := c.GetHeader("Authorization")
+// 		if authHeader == "" {
+// 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+// 			c.Abort()
+// 			return
+// 		}
+
+// 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+// 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+// 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+// 				return nil, fmt.Errorf("unexpected signing method")
+// 			}
+// 			return jwtKey, nil
+// 		})
+
+// 		if err != nil || !token.Valid {
+// 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+// 			c.Abort()
+// 			return
+// 		}
+
+// 		c.Next()
+// 	}
+// }
+
 // func CreateUserHandler(c *gin.Context) {
 // 	if c.Request.Method != http.MethodPost {
 // 		c.String(http.StatusMethodNotAllowed, "Method Not Allowed")
